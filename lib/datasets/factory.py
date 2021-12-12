@@ -9,6 +9,7 @@ __sets = {}
 import datasets.tabletop_object
 import datasets.osd_object
 import datasets.ocid_object
+import datasets.usar_eval_object
 import numpy as np
 
 # tabletop object dataset
@@ -31,6 +32,11 @@ for split in ['test']:
     print(name)
     __sets[name] = (lambda split=split:
             datasets.OCIDObject(split))
+
+for split in ['test']:
+    name = 'usar_eval_object_{}'.format(split)
+    __sets[name] = (lambda split=split:
+            datasets.USAREvalObject(split))
 
 def get_dataset(name):
     """Get an imdb (image database) by name."""
