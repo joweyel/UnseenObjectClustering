@@ -281,6 +281,8 @@ def test_segnet(test_loader, network, output_dir, network_crop):
     metrics_all = []
     metrics_all_refined = []
     for i, sample in enumerate(test_loader):
+        print('TestLoader[{}]'.format(i))
+        print('sample = ', sample.keys())
 
         end = time.time()
 
@@ -291,6 +293,11 @@ def test_segnet(test_loader, network, output_dir, network_crop):
         else:
             depth = None
         label = sample['label'].cuda()
+
+        print('RGB = ', image.shape)
+        print('D = ', depth.shape)
+        print('L = ', label.shape)
+
 
         # run network
         features = network(image, label, depth).detach()
@@ -327,14 +334,13 @@ def test_segnet(test_loader, network, output_dir, network_crop):
             metrics_all_refined.append(metrics_refined)
             print(metrics_refined)
 
-        if cfg.TEST.VISUALIZE:
+        if False and cfg.TEST.VISUALIZE:
             _vis_minibatch_segmentation(image, depth, label, out_label, out_label_refined, features, 
                 selected_pixels=selected_pixels, bbox=None)
         else:
             # save results
             result = {'labels': prediction, 'labels_refined': prediction_refined, 'filename': sample['filename']}
             filename = os.path.join(output_dir, '%06d.mat' % i)
-            print(filename)
             scipy.io.savemat(filename, result, do_compression=True)
 
         # measure elapsed time

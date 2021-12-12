@@ -26,6 +26,7 @@ import networks
 import rospy
 import copy
 
+from utils.blob import pad_im
 from sensor_msgs.msg import Image, CameraInfo
 from cv_bridge import CvBridge, CvBridgeError
 from fcn.config import cfg, cfg_from_file, get_output_dir
@@ -67,9 +68,14 @@ class ImageListener:
         if cfg.TEST.ROS_CAMERA == 'D415':
             # use RealSense D435
             self.base_frame = 'measured/base_link'
+            
             rgb_sub = message_filters.Subscriber('/camera/color/image_raw', Image, queue_size=10)
             depth_sub = message_filters.Subscriber('/camera/aligned_depth_to_color/image_raw', Image, queue_size=10)
             msg = rospy.wait_for_message('/camera/color/camera_info', CameraInfo)
+            # rgb_sub = message_filters.Subscriber('/rgbd_camera/color/image_raw', Image, queue_size=10)
+            # depth_sub = message_filters.Subscriber('/rgbd_camera/aligned_depth_to_color/image_raw', Image, queue_size=10)
+            # msg = rospy.wait_for_message('/rgbd_camera/color/camera_info', CameraInfo)
+
             self.camera_frame = 'measured/camera_color_optical_frame'
             self.target_frame = self.base_frame
         elif cfg.TEST.ROS_CAMERA == 'Azure':

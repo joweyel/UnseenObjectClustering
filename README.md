@@ -24,9 +24,10 @@ If you find Unseen Object Clustering useful in your research, please consider ci
 
 ### Required environment
 
-- Ubuntu 16.04 or above
-- PyTorch 0.4.1 or above
-- CUDA 9.1 or above
+Successfully tested with
+- Ubuntu 20.04
+- PyTorch 1.7.1+cu101
+- CUDA 10.1
 
 
 ### Installation
@@ -37,6 +38,21 @@ If you find Unseen Object Clustering useful in your research, please consider ci
    ```Shell
    pip install -r requirement.txt
    ```
+3. Install Python-PCL
+   In order to use the python-pcl functionality to load datasets, you can not use the deprecated and un-maintained pip-package anymore. Instead install the apt-package `python3-pcl` with 
+   ```Shell
+   sudo apt install python3-pcl
+   ```
+   This will install the required PCL-Package in `/usr/lib/python3/dist-packages/pcl/`.
+   You can copy this folder into the `lib/python3.X/site-packages/`-folder of any local virtual environment to make it accessible there.
+   ```Shell
+   sudo cp -R /usr/lib/python3/dist-packages/pcl <path-to-virtualenv>/lib/python3.X/site-packages/
+   ```
+   If you get problems with access-rights of the package use this: 
+   ```Shell
+   sudo chown -R $USER <path-to-virtualenv>/lib/python3.X/site-packages/pcl/
+   ```
+
 
 
 ### Download

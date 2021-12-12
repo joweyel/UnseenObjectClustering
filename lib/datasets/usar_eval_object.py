@@ -24,12 +24,12 @@ data_loading_params = {
     
     # Camera/Frustum parameters
     'img_width' : 640, 
-    'img_height' : 480,  
+    'img_height' : 480,
     'near' : 0.01,
     'far' : 100,
     'fov' : 45, # vertical field of view in degrees
     
-    'use_data_augmentation' : True,
+    'use_data_augmentation' : False, # True,
 
     # Multiplicative noise
     'gamma_shape' : 1000.,
@@ -54,6 +54,9 @@ data_loading_params = {
     'pixel_dropout_beta' : 10.,    
 }
 
+################################################################
+#          Projection of Depth to point cloud                  #
+################################################################
 def compute_xyz(depth_img, camera_params):
     """ Compute ordered point cloud from depth image and camera parameters.
 
@@ -92,44 +95,99 @@ def compute_xyz(depth_img, camera_params):
     
     return xyz_img
 
+# class USAREvalObject(data.Dataset, datasets.imdb):
+#     def __init__(self, scene, usar_object_path):
+#         self._name = 'usar_eval_' + scene
+#         # self._image_set = image_set    # -> not needed since only evaluation done
+#         self._usar_object_path = usar_object_path # has to be provided for each scene!
 
-class TableTopObject(data.Dataset, datasets.imdb):
-    def __init__(self, image_set, tabletop_object_path = None):
+#         pass
 
-        self._name = 'tabletop_object_' + image_set
+class USAREvalObject(data.Dataset, datasets.imdb):
+    def __init__(self, image_set, usar_eval_object_path=None):
+        self._name = 'usar_eval_object_' + image_set
         self._image_set = image_set
-        self._tabletop_object_path = self._get_default_path() if tabletop_object_path is None \
-                            else tabletop_object_path
+        self._usar_eval_object_path = self._get_default_path() if usar_eval_object_path is None \
+                            else usar_eval_object_path
         self._classes_all = ('__background__', 'foreground')
         self._classes = self._classes_all
         self._pixel_mean = torch.tensor(cfg.PIXEL_MEANS / 255.0).float()
         self.params = data_loading_params
+        
+        # get the eval data
+        data_path = os.path.join(self._usar_eval_object_path, 'test_set')
+        
+        self.scene_dirs = sorted(glob.glob(data_path + '/*'))
 
-        # crop dose not use background
-        if cfg.TRAIN.SYN_CROP:
-            self.NUM_VIEWS_PER_SCENE = 5
-        else:
-            self.NUM_VIEWS_PER_SCENE = 7
+        '''
+            get the intrinsics
+        '''
+        self.data = {}
 
+        idx = 0
+        for dir in self.scene_dirs:
+            curr_dir = os.path.basename(dir)
+            nr_scene_files = int((len(os.listdir(dir)) - 1) / 3)
+            print('nr_scene_files = ', nr_scene_files)
+            scene_path = os.path.join(data_path, curr_dir)
+            imgs = [file for file in os.listdir(scene_path) if file.split('_')[0] == 'rgb']
+            scene_nrs = sorted([file.split('_')[-1].split('.')[0] for file in imgs])
+            
+            # create LUT for 
+            for nr in scene_nrs:
+                rgb_img = os.path.join(scene_path, 'rgb_' + nr + '.jpeg')
+                depth_img = os.path.join(scene_path, 'depth_' + nr + '.png')
+                seg_img = os.path.join(scene_path, 'segmentation_' + nr + '.png')
+                self.data[idx] = [rgb_img, depth_img, seg_img]
+                assert(os.path.exists(self.data[idx][0]) and 
+                       os.path.exists(self.data[idx][1]) and 
+                       os.path.exists(self.data[idx][2]))                
+                idx += 1
+        
+        num_imgs = len(self.data)
+        print('num_imgs = ', num_imgs)
+        # print(self.data)
+
+        # self.dir_nums = {}
+        # # print(self.scene_dirs)
+        # num_imgs = 0
+        # for dir in self.scene_dirs:
+        #     curr_dir = os.path.basename(dir)
+        #     nr_scene_files = int((len(os.listdir(dir)) - 1) / 3)
+        #     num_imgs += nr_scene_files
+        #     self.dir_nums[curr_dir] = (nr_scene_files, num_imgs)
+        #     print('scene: ', curr_dir, '-> ', nr_scene_files, ' | sum = ', num_imgs)
+        # # print(num_imgs)
+        # print(self.dir_nums)
+        # # print(self.scene_dirs)
+        # for scene in self.scene_dirs:
+        #     print(scene)
+
+
+
+
+        '''
         # get a list of all scenes
         if image_set == 'train':
-            data_path = os.path.join(self._tabletop_object_path, 'training_set')
+            data_path = os.path.join(self._usar_eval_object_path, 'training_set')
             self.scene_dirs = sorted(glob.glob(data_path + '/*'))
         elif image_set == 'test':
-            data_path = os.path.join(self._tabletop_object_path, 'test_set')
+            data_path = os.path.join(self._usar_eval_object_path, 'test_set')
             print(data_path)
             self.scene_dirs = sorted(glob.glob(data_path + '/*'))
+            print('self.scene_dirs = ', self.scene_dirs)
         elif image_set == 'all':
-            data_path = os.path.join(self._tabletop_object_path, 'training_set')
+            data_path = os.path.join(self._usar_eval_object_path, 'training_set')
             scene_dirs_train = sorted(glob.glob(data_path + '/*'))
-            data_path = os.path.join(self._tabletop_object_path, 'test_set')
+            data_path = os.path.join(self._usar_eval_object_path, 'test_set')
             scene_dirs_test = sorted(glob.glob(data_path + '/*'))
             self.scene_dirs = scene_dirs_train + scene_dirs_test
+        '''
 
         print('%d scenes for dataset %s' % (len(self.scene_dirs), self._name))
-        self._size = len(self.scene_dirs) * self.NUM_VIEWS_PER_SCENE
-        assert os.path.exists(self._tabletop_object_path), \
-                'tabletop_object path does not exist: {}'.format(self._tabletop_object_path)
+        self._size = num_imgs
+        assert os.path.exists(self._usar_eval_object_path), \
+                'tabletop_object path does not exist: {}'.format(self._usar_eval_object_path)
 
 
     def process_depth(self, depth_img):
@@ -153,7 +211,7 @@ class TableTopObject(data.Dataset, datasets.imdb):
         if self.params['use_data_augmentation']:
             xyz_img = augmentation.add_noise_to_xyz(xyz_img, depth_img, self.params)
         return xyz_img
-
+    
 
     def process_label(self, foreground_labels):
         """ Process foreground_labels
@@ -235,8 +293,7 @@ class TableTopObject(data.Dataset, datasets.imdb):
             depth_crop = None
 
         return img_crop, label_crop, depth_crop
-
-
+        
     # sample num of pixel for clustering instead of using all
     def sample_pixels(self, labels, num=1000):
         # -1 ignore
@@ -254,43 +311,41 @@ class TableTopObject(data.Dataset, datasets.imdb):
         return labels_new
 
 
+    ###################################################################
+    ###################################################################
+
     def __getitem__(self, idx):
 
-        # Get scene directory, crop dose not use background
-        scene_idx = idx // self.NUM_VIEWS_PER_SCENE
-        scene_dir = self.scene_dirs[scene_idx]
+        sample = self.data[idx]     # (idx: [rgb, d, seg])
+        rgb_path = sample[0]
+        depth_path = sample[1]
+        segmentation_path = sample[2]
 
-        print('idx = ', idx)
-        print('scene_idx = ', scene_idx)
-        print('scene_dir = ', scene_dir)
-        # print('Files: ', os.listdir(scene_dir))
+        # _, ax = plt.subplots(1, 3)
+        # ax[0].imshow(rgb)
+        # ax[1].imshow(depth)
+        # ax[2].imshow(segmentation)
+        # plt.show()
 
-
-        # Get view number
-        view_num = idx % self.NUM_VIEWS_PER_SCENE
-        if cfg.TRAIN.SYN_CROP:
-            view_num += 2
-        print('view_num = ', view_num)
-
-        # Label
-        foreground_labels_filename = os.path.join(scene_dir, 'segmentation_%05d.png' % view_num)
+        foreground_labels_filename = segmentation_path
         foreground_labels = util_.imread_indexed(foreground_labels_filename)
         # mask table as background
         foreground_labels[foreground_labels == 1] = 0
         foreground_labels = self.process_label(foreground_labels)
 
         # BGR image
-        filename = os.path.join(scene_dir, 'rgb_%05d.jpeg' % view_num)
+        filename = rgb_path
         im = cv2.imread(filename)
+
 
         if cfg.INPUT == 'DEPTH' or cfg.INPUT == 'RGBD':
             # Depth image
-            depth_img_filename = os.path.join(scene_dir, 'depth_%05d.png' % view_num)
+            depth_img_filename = depth_path
             depth_img = cv2.imread(depth_img_filename, cv2.IMREAD_ANYDEPTH) # This reads a 16-bit single-channel image. Shape: [H x W]
             xyz_img = self.process_depth(depth_img)
         else:
             xyz_img = None
-
+    
         # crop
         if cfg.TRAIN.SYN_CROP:
             im, foreground_labels, xyz_img = self.pad_crop_resize(im, foreground_labels, xyz_img)
@@ -299,8 +354,7 @@ class TableTopObject(data.Dataset, datasets.imdb):
         # sample labels
         if cfg.TRAIN.EMBEDDING_SAMPLING:
             foreground_labels = self.sample_pixels(foreground_labels, cfg.TRAIN.EMBEDDING_SAMPLING_NUM)
-
-
+        
         label_blob = torch.from_numpy(foreground_labels).unsqueeze(0)
         sample = {'label': label_blob}
 
@@ -308,17 +362,17 @@ class TableTopObject(data.Dataset, datasets.imdb):
             im = chromatic_transform(im)
         if cfg.TRAIN.ADD_NOISE and cfg.MODE == 'TRAIN' and np.random.rand(1) > 0.1:
             im = add_noise(im)
+
         im_tensor = torch.from_numpy(im) / 255.0
         im_tensor -= self._pixel_mean
         image_blob = im_tensor.permute(2, 0, 1)
         sample['image_color'] = image_blob
-
+        
         if cfg.INPUT == 'DEPTH' or cfg.INPUT == 'RGBD':
             depth_blob = torch.from_numpy(xyz_img).permute(2, 0, 1)
             sample['depth'] = depth_blob
-
+        
         return sample
-
 
     def __len__(self):
         return self._size
@@ -328,4 +382,4 @@ class TableTopObject(data.Dataset, datasets.imdb):
         """
         Return the default path where tabletop_object is expected to be installed.
         """
-        return os.path.join(datasets.ROOT_DIR, 'data', 'tabletop')
+        return os.path.join(datasets.ROOT_DIR, 'data', 'usar_eval')

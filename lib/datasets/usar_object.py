@@ -2,6 +2,8 @@
 # This work is licensed under the NVIDIA Source Code License - Non-commercial. Full
 # text can be found in LICENSE.md
 
+# This code is an adaption of the original code to another dataset!
+
 import torch
 import torch.utils.data as data
 import os, math
@@ -22,13 +24,17 @@ from utils import mask as util_
 
 data_loading_params = {
     
+    ## Camera parameters
+
     # Camera/Frustum parameters
-    'img_width' : 640, 
-    'img_height' : 480,  
+    'img_width' : 640,
+    'img_height' : 480,
     'near' : 0.01,
     'far' : 100,
     'fov' : 45, # vertical field of view in degrees
     
+    ## Augmentatation Parameters
+
     'use_data_augmentation' : True,
 
     # Multiplicative noise
@@ -53,6 +59,7 @@ data_loading_params = {
     'pixel_dropout_alpha' : 1., 
     'pixel_dropout_beta' : 10.,    
 }
+
 
 def compute_xyz(depth_img, camera_params):
     """ Compute ordered point cloud from depth image and camera parameters.
@@ -92,45 +99,44 @@ def compute_xyz(depth_img, camera_params):
     
     return xyz_img
 
-
-class TableTopObject(data.Dataset, datasets.imdb):
-    def __init__(self, image_set, tabletop_object_path = None):
+class UsarObject(data.Dataset, datasets.imdb):
+    def __init__(self, image_set, rescue_object_path = None):
 
         self._name = 'tabletop_object_' + image_set
         self._image_set = image_set
-        self._tabletop_object_path = self._get_default_path() if tabletop_object_path is None \
-                            else tabletop_object_path
+        self._rescue_object_path = self._get_default_path() if rescue_object_path is None \
+                            else rescue_object_path
         self._classes_all = ('__background__', 'foreground')
         self._classes = self._classes_all
         self._pixel_mean = torch.tensor(cfg.PIXEL_MEANS / 255.0).float()
         self.params = data_loading_params
 
-        # crop dose not use background
-        if cfg.TRAIN.SYN_CROP:
-            self.NUM_VIEWS_PER_SCENE = 5
-        else:
-            self.NUM_VIEWS_PER_SCENE = 7
+        ## crop dose not use background ???
+        # if cfg.TRAIN.SYN_CROP:
+        #     self.NUM_VIEWS_PER_SCENE = 5
+        # else:
+        #     self.NUM_VIEWS_PER_SCENE = 7
+        self.NUM_VIEWS_PER_SCENE = 10
 
         # get a list of all scenes
         if image_set == 'train':
-            data_path = os.path.join(self._tabletop_object_path, 'training_set')
+            data_path = os.path.join(self._rescue_object_path, 'training_set')
             self.scene_dirs = sorted(glob.glob(data_path + '/*'))
         elif image_set == 'test':
-            data_path = os.path.join(self._tabletop_object_path, 'test_set')
+            data_path = os.path.join(self._rescue_object_path, 'test_set')
             print(data_path)
             self.scene_dirs = sorted(glob.glob(data_path + '/*'))
         elif image_set == 'all':
-            data_path = os.path.join(self._tabletop_object_path, 'training_set')
+            data_path = os.path.join(self._rescue_object_path, 'training_set')
             scene_dirs_train = sorted(glob.glob(data_path + '/*'))
-            data_path = os.path.join(self._tabletop_object_path, 'test_set')
+            data_path = os.path.join(self._rescue_object_path, 'test_set')
             scene_dirs_test = sorted(glob.glob(data_path + '/*'))
             self.scene_dirs = scene_dirs_train + scene_dirs_test
 
         print('%d scenes for dataset %s' % (len(self.scene_dirs), self._name))
         self._size = len(self.scene_dirs) * self.NUM_VIEWS_PER_SCENE
-        assert os.path.exists(self._tabletop_object_path), \
-                'tabletop_object path does not exist: {}'.format(self._tabletop_object_path)
-
+        assert os.path.exists(self._rescue_object_path), \
+                'rescue_object path does not exist: {}'.format(self._rescue_object_path)
 
     def process_depth(self, depth_img):
         """ Process depth channel
@@ -154,7 +160,7 @@ class TableTopObject(data.Dataset, datasets.imdb):
             xyz_img = augmentation.add_noise_to_xyz(xyz_img, depth_img, self.params)
         return xyz_img
 
-
+    
     def process_label(self, foreground_labels):
         """ Process foreground_labels
                 - Map the foreground_labels to {0, 1, ..., K-1}
@@ -170,8 +176,7 @@ class TableTopObject(data.Dataset, datasets.imdb):
             mapped_labels[foreground_labels == unique_nonnegative_indices[k]] = k
         foreground_labels = mapped_labels
         return foreground_labels
-
-
+    
     def pad_crop_resize(self, img, label, depth):
         """ Crop the image around the label mask, then resize to 224x224
         """
@@ -252,25 +257,17 @@ class TableTopObject(data.Dataset, datasets.imdb):
                 selected = perm[:num]
                 labels_new[index[0][selected], index[1][selected]] = i
         return labels_new
-
-
+    
     def __getitem__(self, idx):
 
         # Get scene directory, crop dose not use background
         scene_idx = idx // self.NUM_VIEWS_PER_SCENE
         scene_dir = self.scene_dirs[scene_idx]
 
-        print('idx = ', idx)
-        print('scene_idx = ', scene_idx)
-        print('scene_dir = ', scene_dir)
-        # print('Files: ', os.listdir(scene_dir))
-
-
         # Get view number
         view_num = idx % self.NUM_VIEWS_PER_SCENE
         if cfg.TRAIN.SYN_CROP:
             view_num += 2
-        print('view_num = ', view_num)
 
         # Label
         foreground_labels_filename = os.path.join(scene_dir, 'segmentation_%05d.png' % view_num)
@@ -300,7 +297,6 @@ class TableTopObject(data.Dataset, datasets.imdb):
         if cfg.TRAIN.EMBEDDING_SAMPLING:
             foreground_labels = self.sample_pixels(foreground_labels, cfg.TRAIN.EMBEDDING_SAMPLING_NUM)
 
-
         label_blob = torch.from_numpy(foreground_labels).unsqueeze(0)
         sample = {'label': label_blob}
 
@@ -322,10 +318,3 @@ class TableTopObject(data.Dataset, datasets.imdb):
 
     def __len__(self):
         return self._size
-
-
-    def _get_default_path(self):
-        """
-        Return the default path where tabletop_object is expected to be installed.
-        """
-        return os.path.join(datasets.ROOT_DIR, 'data', 'tabletop')
